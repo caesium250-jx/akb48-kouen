@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AKB48 剧场公演信息</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Dosis:wght@600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Element Plus CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+
+    <!-- App Styles -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ====== Header ====== -->
+    <header class="site-header">
+        <div class="inner">
+            <h1>AKB48 Theater Schedule</h1>
+            <div class="sub">AKB48 剧场公演日程 · 出演成员</div>
+            <div class="author-link">
+                <a href="https://space.bilibili.com/12606474" target="_blank" rel="noopener">憨憨使徒</a>
+                <span class="sep">|</span>
+                <span style="opacity:0.7;">每日自动更新</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ====== App Root ====== -->
+    <div id="app" class="container">
+
+        <!-- ====== Toolbar ====== -->
+        <div class="toolbar">
+            <div class="month-nav">
+                <button class="btn btn-circle" @click="prevMonth" title="上个月">‹</button>
+                <span class="label">{{ year }} / {{ pad(month) }}</span>
+                <button class="btn btn-circle" @click="nextMonth" title="下个月">›</button>
+            </div>
+            <span class="btn-today-wrap">
+                <button class="btn btn-sm btn-today" @click="goToday">今天</button>
+            </span>
+        </div>
+
+        <!-- ====== Calendar (collapsible) ====== -->
+        <div class="card cal-card" style="margin-bottom:14px;">
+            <button class="section-toggle" @click="toggleCalendar" type="button">
+                <span class="toggle-left">
+                    📅 日历
+                    <span class="toggle-dot"></span>
+                </span>
+                <span class="toggle-arrow" :class="{ open: calendarOpen }">▶</span>
+            </button>
+            <div class="section-body" v-show="calendarOpen">
+                <div class="cal-card-bd">
+                    <div class="cal-week">
+                        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                    </div>
+                    <div class="cal-grid">
+                        <div v-for="d in calendarDays" :key="d.key"
+                            class="cal-day"
+                            :class="{ other: !d.inMonth, today: d.isToday, sel: selectedDate === d.dateStr }"
+                            @click="selectDate(d.dateStr)">
+                            <span>{{ d.day }}</span>
+                            <div v-if="d.hasEvent" class="dot"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== Member Panel (collapsible) ====== -->
+        <div class="card" style="margin-bottom:14px;">
+            <button class="section-toggle" @click="toggleMemberPanel" type="button">
+                <span class="toggle-left">
+                    👥 出演成员
+                    <span class="toggle-count">{{ filteredMemberList.length }}</span>
+                    <span v-if="selectedMembers.size" class="toggle-clear" @click.stop="clearMemberFilter">清除</span>
+                </span>
+                <span class="toggle-arrow" :class="{ open: memberPanelOpen }">▶</span>
+            </button>
+            <div class="section-body" v-show="memberPanelOpen">
+                <div class="section-body-inner">
+                    <input class="member-search"
+                        v-model="memberSearchQuery"
+                        type="text"
+                        placeholder="🔍 搜索成员姓名...">
+                    <div class="member-panel">
+                        <div v-for="m in filteredMemberList" :key="m"
+                            class="member-item"
+                            :class="{ active: selectedMembers.has(m) }"
+                            @click="toggleMember(m)">
+                            {{ m }}
+                        </div>
+                        <div v-if="!filteredMemberList.length" class="member-empty-search">
+                            {{ memberSearchQuery ? '没有匹配的成员' : '暂无成员数据' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== Event List ====== -->
+        <div class="card">
+            <div class="card-hd">
+                <span>
+                    {{ selectedDate ? formatDate(selectedDate) + ' ' + getDayOfWeek(selectedDate) : '公演列表' }}
+                </span>
+                <span style="display:flex;gap:6px;">
+                    <button class="btn btn-sm" :class="{ 'btn-pink': showFutureOnly }" @click="showFutureOnly = true; selectedDate = null">
+                        📅 今日起
+                    </button>
+                    <button class="btn btn-sm" @click="selectedDate = null; showFutureOnly = false">显示全部</button>
+                </span>
+            </div>
+            <div class="event-list">
+                <!-- Empty State -->
+                <div v-if="!groupedEvents.length" class="empty-state">
+                    <span class="ico">📭</span>
+                    <p v-if="selectedDate">当天没有公演</p>
+                    <p v-else-if="selectedMembers.size">该成员没有出演</p>
+                    <p v-else>没有公演数据</p>
+                </div>
+
+                <!-- Grouped Events -->
+                <template v-for="[date, events] in groupedEvents" :key="date">
+                    <div class="date-label">{{ formatDate(date) }} {{ getDayOfWeek(date) }}</div>
+                    <div v-for="ev in events" :key="ev.id"
+                        class="event-card"
+                        :class="{ closed: ev.isClosed }"
+                        @click="showDetail(ev)">
+                        <!-- Meta -->
+                        <div class="meta">
+                            <i class="time-icon">⏰</i>
+                            <span v-if="ev.time">{{ ev.time }} 开演</span>
+                            <span v-else style="color:#bbb;">时间未定</span>
+                            <span class="status-badge"
+                                :class="ev.isClosed ? 'closed-badge' : ev.isUndecided ? 'pending' : 'perform'">
+                                {{ ev.isClosed ? '休馆' : ev.isUndecided ? '未定' : '公演' }}
+                            </span>
+                        </div>
+                        <!-- Title -->
+                        <div class="title">
+                            {{ ev.isClosed ? '— 休馆日 —' : ev.title }}
+                            <span v-if="ev.subtitle" class="ev-badge">{{ ev.subtitle }}</span>
+                        </div>
+                        <!-- Notice -->
+                        <div v-if="ev.notice" class="ev-notice">{{ ev.notice }}</div>
+                        <!-- Members -->
+                        <div v-if="ev.memberNames.length" class="members">
+                            <span v-for="m in ev.memberNames" :key="m"
+                                class="tag"
+                                @click.stop="toggleMember(m)">{{ m }}</span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- ====== Footer ====== -->
+        <div class="source-bar">
+            数据来源: AKB48 官方网站 · 每日自动更新
+        </div>
+
+        <!-- ====== Detail Dialog ====== -->
+        <el-dialog v-model="detailVisible" :title="detailEvent?.title || ''" width="420px">
+            <div v-if="detailEvent">
+                <p><span class="detail-icon">📅</span>{{ formatDate(detailEvent.date) }} {{ getDayOfWeek(detailEvent.date) }}</p>
+                <p v-if="detailEvent.subtitle">
+                    <span class="detail-icon">🏷️</span>
+                    <span style="color:var(--akb-pink);font-weight:600;">{{ detailEvent.subtitle }}</span>
+                </p>
+                <p v-if="detailEvent.time">
+                    <span class="detail-icon">⏰</span>
+                    {{ detailEvent.time }} 开演
+                </p>
+                <p v-if="detailEvent.location">
+                    <span class="detail-icon">📍</span>
+                    {{ detailEvent.location }}
+                </p>
+                <div v-if="detailEvent.notice" class="detail-notice">
+                    <span class="detail-icon">📌</span>
+                    {{ detailEvent.notice }}
+                </div>
+                <p style="margin:14px 0 8px;">
+                    <span class="detail-icon">👥</span>
+                    出演成员（{{ detailEvent.memberNames?.length || 0 }} 人）
+                </p>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    <el-tag v-for="m in detailEvent.memberNames" :key="m"
+                        type="danger" effect="plain" size="small"
+                        @click="toggleMember(m); detailVisible=false;">
+                        {{ m }}
+                    </el-tag>
+                </div>
+            </div>
+        </el-dialog>
+    </div>
+
+    <!-- ====== Scripts ====== -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/element-plus"></script>
+    <script src="js/data.js"></script>
+    <script src="js/composables.js"></script>
+    <script src="js/app.js"></script>
+    <script>app.use(ElementPlus); app.mount('#app');</script>
+</body>
+</html>
