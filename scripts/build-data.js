@@ -14,6 +14,8 @@ const https = require('https');
 const qs = require('querystring');
 
 const DATA_FILE = __dirname + '/../js/data.js';
+const LINKS_FILE = __dirname + '/video-links.json';
+const CONFIG_FILE = __dirname + '/config.json';
 const API_HOST = 'www.akb48.co.jp';
 
 function post(host, path, data) {
@@ -45,18 +47,38 @@ async function main() {
     if (memberRes.result !== 'ok') throw new Error('Member API failed');
     const members = memberRes.data;
 
+    // ---- 读取配置（毕业成员名称 + 要跳过的公演） ----
+    let userConfig = { graduated: {}, skipTitles: [] };
+    try {
+        if (fs.existsSync(CONFIG_FILE)) {
+            userConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+        }
+    } catch (_) { /* ignore */ }
+
+    // 将毕业成员合并到 members 中，使它们的名称能被解析
+    for (const [id, name] of Object.entries(userConfig.graduated || {})) {
+        if (!members[id]) members[id] = { name: name };
+    }
+
     // Build MEMBER_MAP (sorted by ID, names without spaces)
     const memberEntries = Object.entries(members)
         .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
         .map(([id, m]) => `    "${id}": "${m.name.replace(/\s+/g, '')}"`);
     const memberMapStr = 'const MEMBER_MAP = {\n' + memberEntries.join(',\n') + '\n};\n';
 
-    // 获取当前月前后各3个月（共6个月）的数据
-    const now = new Date();
+    // 抓取从 2026-01 至当前年月的数据（多抓 2 个月确保未来公演可见）
+    const nowDate = new Date();
+    const curYear = nowDate.getFullYear();
+    const curMonth = nowDate.getMonth() + 1;
+    const startYear = 2026;
+
     const fetchMonths = [];
-    for (let i = -2; i <= 3; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-        fetchMonths.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+    for (let y = startYear; y <= curYear; y++) {
+        const startM = y === startYear ? 1 : 1;
+        const endM = y === curYear ? Math.min(curMonth + 2, 12) : 12;
+        for (let m = startM; m <= endM; m++) {
+            fetchMonths.push({ year: y, month: m });
+        }
     }
 
     console.log(`[build-data] Fetching schedule (${fetchMonths.length} months)...`);
@@ -74,12 +96,14 @@ async function main() {
     for (const { year, month: m } of fetchMonths) {
         try {
             const res = await post(API_HOST, '/public/api/schedule/calendar/', {
-                month: m, year: 2026, category: '0'
+                month: m, year: year, category: '0'
             });
             if (res.data && res.data.thismonth) {
                 for (const [k, events] of Object.entries(res.data.thismonth)) {
                     const theater = events
                         .filter(e => e.parent_category === '1')
+                        .filter(e => !(userConfig.skipTitles || []).includes(e.title))
+                        .filter(e => e.title !== '休館日')
                         .map(e => {
                             let time = '';
                             let notice = '';
@@ -156,6 +180,19 @@ async function main() {
         }
     }
 
+    // ---- 读取用户自定义的录像链接 ----
+    let videoLinks = {};
+    try {
+        if (fs.existsSync(LINKS_FILE)) {
+            const raw = fs.readFileSync(LINKS_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            // 过滤掉以 // 开头的注释键
+            for (const [k, v] of Object.entries(parsed)) {
+                if (!k.startsWith('//') && v) videoLinks[k] = v;
+            }
+        }
+    } catch (_) { /* ignore */ }
+
     // Build EMBEDDED_DATA
     const sortedKeys = Object.keys(allData).sort();
     const dataLines = ['const EMBEDDED_DATA = {'];
@@ -168,10 +205,16 @@ async function main() {
             const [y, m] = key.split('_');
             dataLines.push(`\n    // ---- ${y}年${parseInt(m)}月 ----`);
         }
-        const formatted = events.map(e => {
+        const formatted = events.map((e, idx) => {
             const t = e.title.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
             const n = e.notice ? e.notice.replace(/"/g, '\\"') : '';
             const s = e.subtitle || '';
+            const linkKey = `${key}-${idx}`;
+            const rawUrl = videoLinks[linkKey] || '';
+            const v = rawUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            if (v) {
+                return `{ title: "${t}", time: "${e.time}", members: "${e.members}", notice: "${n}", subtitle: "${s}", videoUrl: "${v}" }`;
+            }
             return `{ title: "${t}", time: "${e.time}", members: "${e.members}", notice: "${n}", subtitle: "${s}" }`;
         });
         if (formatted.length === 1) {

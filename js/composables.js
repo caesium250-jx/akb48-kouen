@@ -20,7 +20,9 @@ function loadFromStorage() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      return { ...EMBEDDED_DATA, ...parsed };
+      // 合并策略：localStorage 持所有历史数据，EMBEDDED_DATA 提供最新覆盖
+      // 这样刷新不丢数据，部署新 data.js 也能获得更新
+      return { ...parsed, ...EMBEDDED_DATA };
     }
   } catch (_) { /* ignore */ }
   return { ...EMBEDDED_DATA };
@@ -28,20 +30,20 @@ function loadFromStorage() {
 
 function saveToStorage(data) {
   try {
-    const diff = {};
-    for (const [k, v] of Object.entries(data)) {
-      if (JSON.stringify(v) !== JSON.stringify(EMBEDDED_DATA[k])) {
-        diff[k] = v;
-      }
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(diff));
-    localStorage.setItem('akb_data_date', new Date().toLocaleString('zh-CN'));
-    localStorage.setItem('akb_data_source', '实时');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (_) { /* localStorage quota exceeded */ }
 }
 
 function useDataStore() {
-  const scheduleData = ref(loadFromStorage());
+  const merged = loadFromStorage();
+  // 清理历史缓存中的休館日数据
+  for (const dateKey of Object.keys(merged)) {
+    merged[dateKey] = merged[dateKey].filter(ev => ev.title !== '休館日' && ev.title !== '休馆日');
+    if (merged[dateKey].length === 0) delete merged[dateKey];
+  }
+  const scheduleData = ref(merged);
+  // 初始化时自动持久化全量数据，刷新后不丢失
+  saveToStorage(merged);
 
   // ---- 成员列表（跨所有月份聚合） ----
   const memberList = computed(() => {
@@ -68,9 +70,31 @@ function useDataStore() {
     return result;
   }
 
+  // ---- 成员出演统计（2026年已过公演数） ----
+  const memberStats = computed(() => {
+    const todayStr = padDate(new Date());
+    const counts = {};
+    for (const name of memberList.value) counts[name] = 0;
+    for (const [dateKey, events] of Object.entries(scheduleData.value)) {
+      const parts = dateKey.split('_');
+      if (parts[0] !== '2026') continue;
+      const dateStr = `${parts[0]}-${pad(parts[1])}-${pad(parts[2])}`;
+      if (dateStr >= todayStr) continue;
+      for (const ev of events) {
+        if (!ev.members) continue;
+        for (const id of ev.members.split(',').filter(Boolean)) {
+          const name = MEMBER_MAP[id];
+          if (name && counts[name] !== undefined) counts[name]++;
+        }
+      }
+    }
+    return counts;
+  });
+
   return {
     scheduleData,
     memberList,
+    memberStats,
     getMonthData
   };
 }
@@ -116,11 +140,10 @@ function useCalendar(dataStore) {
           title: ev.title || '内容待定',
           notice: ev.notice || '',
           subtitle: ev.subtitle || '',
+          videoUrl: ev.videoUrl || '',
           memberIds,
           memberNames,
-          location: 'AKB48剧场',
-          isClosed: ev.title === '休館日' || ev.title === '休馆日',
-          isUndecided: ev.title === '公演内容未定'
+          location: 'AKB48剧场'
         });
       });
     }
@@ -238,9 +261,9 @@ function useFilter(calendar) {
     const todayStr = padDate(new Date());
     const groups = {};
     for (const ev of calendar.allEvents.value) {
-      // 成员筛选
+      // 成员筛选（交集：所有选中成员必须同时出演）
       if (selectedMembers.value.size > 0 &&
-        !ev.memberNames.some(m => selectedMembers.value.has(m))) {
+        ![...selectedMembers.value].every(m => ev.memberNames.includes(m))) {
         continue;
       }
       // 日期筛选
@@ -268,17 +291,12 @@ function useFilter(calendar) {
     selectedMembers.value = new Set();
   }
 
-  function toggleFutureOnly() {
-    showFutureOnly.value = !showFutureOnly.value;
-  }
-
   return {
     selectedMembers,
     groupedEvents,
     showFutureOnly,
     toggleMember,
-    clearMemberFilter,
-    toggleFutureOnly
+    clearMemberFilter
   };
 }
 

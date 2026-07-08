@@ -93,7 +93,8 @@
                             class="member-item"
                             :class="{ active: selectedMembers.has(m) }"
                             @click="toggleMember(m)">
-                            {{ m }}
+                            <span class="member-name">{{ m }}</span>
+                            <span class="member-count">{{ memberStats[m] || 0 }}</span>
                         </div>
                         <div v-if="!filteredMemberList.length" class="member-empty-search">
                             {{ memberSearchQuery ? '没有匹配的成员' : '暂无成员数据' }}
@@ -130,21 +131,20 @@
                     <div class="date-label">{{ formatDate(date) }} {{ getDayOfWeek(date) }}</div>
                     <div v-for="ev in events" :key="ev.id"
                         class="event-card"
-                        :class="{ closed: ev.isClosed }"
                         @click="showDetail(ev)">
                         <!-- Meta -->
                         <div class="meta">
                             <i class="time-icon">⏰</i>
                             <span v-if="ev.time">{{ ev.time }} 开演</span>
                             <span v-else style="color:#bbb;">时间未定</span>
-                            <span class="status-badge"
-                                :class="ev.isClosed ? 'closed-badge' : ev.isUndecided ? 'pending' : 'perform'">
-                                {{ ev.isClosed ? '休馆' : ev.isUndecided ? '未定' : '公演' }}
-                            </span>
+                            <button v-if="isPastEvent(ev.date)" class="btn-play"
+                                :class="{ linked: !!ev.videoUrl }"
+                                @click.stop="openVideoUrl(ev)"
+                                :title="ev.videoUrl ? '观看录像' : '暂无录像'">▶</button>
                         </div>
                         <!-- Title -->
                         <div class="title">
-                            {{ ev.isClosed ? '— 休馆日 —' : ev.title }}
+                            {{ ev.title }}
                             <span v-if="ev.subtitle" class="ev-badge">{{ ev.subtitle }}</span>
                         </div>
                         <!-- Notice -->
@@ -198,6 +198,7 @@
                 </div>
             </div>
         </el-dialog>
+
     </div>
 
     <!-- ====== Scripts ====== -->

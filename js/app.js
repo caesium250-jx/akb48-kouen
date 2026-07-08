@@ -6,7 +6,7 @@
  */
 
 // 注意: ref/computed 已在 composables.js 中声明，此处不重复声明
-const { createApp, onMounted } = Vue;
+const { createApp } = Vue;
 
 const app = createApp({
   setup() {
@@ -39,25 +39,31 @@ const app = createApp({
       calendarOpen.value = !calendarOpen.value;
     }
 
-    // ---- 成员搜索过滤 ----
+    // ---- 成员搜索过滤（按出演数降序排列） ----
     const filteredMemberList = computed(() => {
       const query = memberSearchQuery.value.trim().toLowerCase();
-      if (!query) return dataStore.memberList.value;
-      return dataStore.memberList.value.filter(name =>
-        name.toLowerCase().includes(query)
-      );
+      let list = dataStore.memberList.value;
+      if (query) {
+        list = list.filter(name => name.toLowerCase().includes(query));
+      }
+      return [...list].sort((a, b) => {
+        const ca = dataStore.memberStats.value[a] || 0;
+        const cb = dataStore.memberStats.value[b] || 0;
+        if (ca !== cb) return cb - ca;
+        return a.localeCompare(b, 'ja');
+      });
     });
 
     // =============================================================
-    //  3. 生命周期
+    //  3. 播放按钮
     // =============================================================
-    onMounted(() => {
-      const now = new Date();
-      const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-      if (calendar.allEvents.value.some(e => e.date === todayStr)) {
-        calendar.selectedDate.value = todayStr;
-      }
-    });
+    function isPastEvent(dateStr) {
+      return dateStr && dateStr < padDate(new Date());
+    }
+
+    function openVideoUrl(ev) {
+      if (ev.videoUrl) window.open(ev.videoUrl, '_blank');
+    }
 
     // =============================================================
     //  4. 暴露模板绑定
@@ -75,6 +81,7 @@ const app = createApp({
       groupedEvents: filter.groupedEvents,
       showFutureOnly: filter.showFutureOnly,
       memberList: dataStore.memberList,
+      memberStats: dataStore.memberStats,
 
       // Panels
       calendarOpen,
@@ -89,13 +96,14 @@ const app = createApp({
       detailEvent,
 
       // Methods
+      isPastEvent,
+      openVideoUrl,
       prevMonth: calendar.prevMonth,
       nextMonth: calendar.nextMonth,
       goToday: calendar.goToday,
       selectDate: calendar.selectDate,
       toggleMember: filter.toggleMember,
       clearMemberFilter: filter.clearMemberFilter,
-      toggleFutureOnly: filter.toggleFutureOnly,
       showDetail,
 
       // Utilities
