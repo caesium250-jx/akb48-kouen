@@ -1,7 +1,7 @@
 /**
  * data.js — AKB48 メンバーマッピング & 埋め込み公演データ
  * 自動生成: scripts/build-data.js
- * 更新日: 2026-07-07
+ * 更新日: 2026-07-08
  */
 
 const MEMBER_MAP = {
@@ -339,7 +339,7 @@ const EMBEDDED_DATA = {
         { title: "「ここからだ」公演", time: "13:00", members: "180,202,204,210,289,1022,1024,1073,1076,1079,1080,1081,1083,1084,1085,1091", notice: "", subtitle: "", videoUrl: "https://www.bilibili.com/video/BV1KoMt67Eqe/?spm_id_from=333.1387.upload.video_card.click" },
         { title: "「ここからだ」公演", time: "17:30", members: "180,202,204,210,289,1022,1024,1073,1076,1079,1080,1081,1083,1084,1085,1091", notice: "", subtitle: "", videoUrl: "https://www.bilibili.com/video/BV1KoMt67Eqe?spm_id_from=333.788.videopod.episodes&vd_source=d8124c8c18c70a2755c4a7fe8d84b52a&p=2" }
     ],
-    "2026_7_6": [{ title: "「ＲＥＳＥＴ」公演", time: "18:30", members: "152,178,183,202,1016,1069,1074,1086", notice: "", subtitle: "" }],
+    "2026_7_6": [{ title: "「ＲＥＳＥＴ」公演", time: "18:30", members: "152,178,183,202,1016,1069,1074,1086", notice: "", subtitle: "", videoUrl: "https://www.bilibili.com/video/BV1DqMY6vE83/?spm_id_from=333.1387.0.0" }],
     "2026_7_7": [{ title: "「ここからだ」公演", time: "18:30", members: "110,183,192,1010,1024,1025,1069,1073,1076,1077,1083,1084,1085,1087,1092", notice: "", subtitle: "" }],
     "2026_7_8": [{ title: "「そこに未来はある」公演　", time: "19:00", members: "1076,1077,1079,1080,1081,1082,1083,1084,1085,1086,1087,1088,1089,1090,1091,1092", notice: "", subtitle: "" }],
     "2026_7_9": [{ title: "「ＲＥＳＥＴ」公演", time: "18:30", members: "152,183,202,210,289,1024,1074,1086", notice: "", subtitle: "" }],
