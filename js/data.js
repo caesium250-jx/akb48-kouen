@@ -1,7 +1,7 @@
 /**
  * data.js — AKB48 メンバーマッピング & 埋め込み公演データ
  * 自動生成: scripts/build-data.js
- * 更新日: 2026-07-20
+ * 更新日: 2026-07-21
  */
 
 const MEMBER_MAP = {
